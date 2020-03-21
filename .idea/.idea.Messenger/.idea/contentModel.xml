@@ -15,6 +15,7 @@
           </e>
         </e>
         <e p="Program.cs" t="Include" />
+        <e p="Secure_Messaging.pdf" t="Include" />
       </e>
       <e p="Messenger.sln" t="IncludeFlat" />
       <e p="packages" t="ExcludeRecursive" />
