@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ContentModelStore">
+    <e p="C:\Users\Josh\.Rider2019.2\system\extResources" t="IncludeRecursive" />
+    <e p="C:\Users\Josh\.Rider2019.2\system\resharper-host\local\Transient\ReSharperHost\v192\SolutionCaches\_Messenger.-1857953070.00" t="ExcludeRecursive" />
+    <e p="C:\Users\Josh\Documents\Notes\2019-2020\Spring Sem\Conc of Par &amp; Dist Systems\Project 3\Messenger" t="IncludeFlat">
+      <e p="Messenger" t="IncludeRecursive">
+        <e p="bin" t="ExcludeRecursive" />
+        <e p="Messenger.csproj" t="IncludeRecursive" />
+        <e p="obj" t="ExcludeRecursive">
+          <e p="Debug" t="Include">
+            <e p="netcoreapp3.1" t="Include">
+              <e p="Messenger.AssemblyInfo.cs" t="Include" />
+            </e>
+          </e>
+        </e>
+        <e p="Program.cs" t="Include" />
+      </e>
+      <e p="Messenger.sln" t="IncludeFlat" />
+      <e p="packages" t="ExcludeRecursive" />
+    </e>
+  </component>
+</project>
