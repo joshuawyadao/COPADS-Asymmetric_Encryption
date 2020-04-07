@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ContentModelStore">
     <e p="C:\Users\Josh\.Rider2019.2\system\extResources" t="IncludeRecursive" />
@@ -14,7 +14,9 @@
             </e>
           </e>
         </e>
+        <e p="private.key" t="Include" />
         <e p="Program.cs" t="Include" />
+        <e p="public.key" t="Include" />
         <e p="Secure_Messaging.pdf" t="Include" />
       </e>
       <e p="Messenger.sln" t="IncludeFlat" />

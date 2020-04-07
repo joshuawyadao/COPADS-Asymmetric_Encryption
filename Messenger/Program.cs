@@ -5,9 +5,7 @@
  * 17 April 2020
  */
 
-
 using System;
-using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
@@ -17,7 +15,7 @@ namespace Messenger
 {
     internal static class Extension
     {
-        static BigInteger ModInverse( BigInteger a, BigInteger n )
+        public static BigInteger ModInverse( BigInteger a, BigInteger n )
         {
             BigInteger i = n, v = 0, d = 1;
             while ( a > 0 )
@@ -91,9 +89,7 @@ namespace Messenger
                 {
                     rngGen.GetBytes(byteArray);
                     var randNum = new BigInteger(byteArray);
-
                     if (!randNum.IsProbablyPrime()) return;
-
                     lock (MyLock)
                     {
                         primeNum = randNum;
@@ -101,7 +97,7 @@ namespace Messenger
                     }
                 });
             }
-            catch (OperationCanceledException) {}
+            catch ( OperationCanceledException ) {}
             return primeNum;
             }
     }
@@ -150,6 +146,22 @@ namespace Messenger
             return val;
         }
 
+        private static void GenerateKey( int keySize, string priKeyFile, string pubKeyFile )
+        {
+            var rand = new Random();
+            var first = keySize / 2 + rand.Next(-keySize / 5 , keySize / 5 ) ;
+            
+            var p = PrimeGen.GenPrimeNum(  first );
+            var q = PrimeGen.GenPrimeNum( keySize - first );
+
+            var n = p * q;
+            var r = ( p - 1 ) * ( q - 1 );
+            var e = PrimeGen.GenPrimeNum( 65536 );
+            var d = Extension.ModInverse( e, r );
+            
+            
+        }
+
         public static void Main( string[] args )
         {
             if ( args.Length != 2 ) Usage();
@@ -160,10 +172,8 @@ namespace Messenger
             switch (option)
             {
                 case Options.KeyGen:
-                    var keySize = Convert.ToInt32( args[1] );
-                    var prime = PrimeGen.GenPrimeNum(  keySize );
-                    
-                    
+                    GenerateKey( Convert.ToInt32( args[1] ), "private.key", "pubic.key" );
+ 
                     break;
                 case Options.SendKey:
                     break;
