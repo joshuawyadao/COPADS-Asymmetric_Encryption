@@ -6,6 +6,8 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
@@ -32,7 +34,7 @@ namespace Messenger
             return v;
         }
         
-        public static bool IsProbablyPrime( this BigInteger value, int witnesses = 10 ) {
+        private static bool IsProbablyPrime( this BigInteger value, int witnesses = 10 ) {
             if ( value <= 1 ) return false;
             
             if ( witnesses <= 0 ) witnesses = 10;
@@ -67,13 +69,11 @@ namespace Messenger
             }
             return true;
         }
-    }
-    
-    internal static class PrimeGen
-    {
-         private static readonly object MyLock = new object();
-         public static BigInteger GenPrimeNum( int bits )
-         {
+        
+        private static readonly object MyLock = new object();
+        
+       /** public static BigInteger GenPrimeNum( int bits )
+        {
             var byteArray = new byte[ bits / 8 ];
             var rngGen = new RNGCryptoServiceProvider();
 
@@ -99,12 +99,56 @@ namespace Messenger
             }
             catch ( OperationCanceledException ) {}
             return primeNum;
+        } */
+       
+       public static List<BigInteger> GenPrimeNum( int bits )
+        {
+            var count = 3;
+
+            var byteArray = new byte[ bits / 8 ];
+            var rngGen = new RNGCryptoServiceProvider();
+            var pCount = 1;
+
+            var po = new ParallelOptions {MaxDegreeOfParallelism = 3};
+            var source = new CancellationTokenSource();
+            po.CancellationToken = source.Token;
+
+            var primes = new List<BigInteger>();
+            
+            try
+            {
+                Parallel.For(1, int.MaxValue, po, (i, state) =>
+                {
+                    rngGen.GetBytes(byteArray);
+                    var randNum = new BigInteger(byteArray);
+
+                    lock (MyLock)
+                    {
+                        if (pCount > count )
+                            source.Cancel();
+                    }
+
+                    if (!randNum.IsProbablyPrime()) return;
+                    lock (MyLock)
+                    {
+                        if (pCount > count)
+                            source.Cancel();
+                        else
+                        {
+                            primes.Add(randNum);
+                            Interlocked.Increment(ref pCount);
+                        }
+                    }
+                });
             }
+            catch (OperationCanceledException) { }
+
+            return primes;
+        } 
     }
 
     class Program
     {
-        
         private enum Options
         {
             KeyGen,
@@ -146,20 +190,49 @@ namespace Messenger
             return val;
         }
 
-        private static void GenerateKey( int keySize, string priKeyFile, string pubKeyFile )
+        private static IEnumerable<byte> LoadByteArray( BigInteger first, BigInteger second )
         {
-            var rand = new Random();
-            var first = keySize / 2 + rand.Next(-keySize / 5 , keySize / 5 ) ;
+            var bList = new List<byte>();
             
-            var p = PrimeGen.GenPrimeNum(  first );
-            var q = PrimeGen.GenPrimeNum( keySize - first );
+            // get size in byte[4]
+            var firstSize = BitConverter.GetBytes( first.GetByteCount() );
+            // put in littleEndian
+            bList.AddRange( !BitConverter.IsLittleEndian ? firstSize : firstSize.Reverse() );
+            // put in bigEndian
+            var firstVal = first.ToByteArray().Reverse();
+            bList.AddRange( firstVal ); 
+            
+            // get size in byte[4]
+            var secondSize = BitConverter.GetBytes( second.GetByteCount() );  
+            // put in littleEndian
+            bList.AddRange( !BitConverter.IsLittleEndian ? secondSize : secondSize.Reverse() ); 
+            // put in BigEndian
+            var secondVal = second.ToByteArray().Reverse();
+            bList.AddRange( secondVal );
+
+            return bList.ToArray();
+        }
+
+        private static void GenerateKey( int bits, string priKeyFile, string pubKeyFile )
+        {
+            var primes = Extension.GenPrimeNum( bits );
+            Console.WriteLine("[{0}]", string.Join(", ", primes));
+            /**
+            var p = primes[0];
+            var q = primes[1];
 
             var n = p * q;
             var r = ( p - 1 ) * ( q - 1 );
-            var e = PrimeGen.GenPrimeNum( 65536 );
+            var e = primes[2];
             var d = Extension.ModInverse( e, r );
+
+            Console.WriteLine( "n: {0}, r: {1}, e: {2}, d: {3}", n, r, e, d);
             
+            //var privateBArr = LoadByteArray( d, n );
+
+            //Console.WriteLine("[{0}]", string.Join(", ", privateBArr));
             
+            //var publicBArr = LoadByteArray( e, n ); */
         }
 
         public static void Main( string[] args )
@@ -172,8 +245,12 @@ namespace Messenger
             switch (option)
             {
                 case Options.KeyGen:
-                    GenerateKey( Convert.ToInt32( args[1] ), "private.key", "pubic.key" );
- 
+                    var keySize = Convert.ToInt32( args[1] );
+                    
+                    //GenerateKey( keySize,"private.key", "public.key" );
+                    
+                    var primes = Extension.GenPrimeNum( keySize );
+                    Console.WriteLine("[{0}]", string.Join(", ", primes));
                     break;
                 case Options.SendKey:
                     break;
