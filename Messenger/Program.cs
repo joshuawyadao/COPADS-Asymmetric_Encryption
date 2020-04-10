@@ -6,12 +6,19 @@
  */
 
 using System;
+using System.Buffers.Text;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace Messenger
 {
@@ -69,39 +76,10 @@ namespace Messenger
             }
             return true;
         }
-        
+
         private static readonly object MyLock = new object();
-        
-       /** public static BigInteger GenPrimeNum( int bits )
-        {
-            var byteArray = new byte[ bits / 8 ];
-            var rngGen = new RNGCryptoServiceProvider();
 
-            var po = new ParallelOptions {MaxDegreeOfParallelism = 3};
-            var source = new CancellationTokenSource();
-            po.CancellationToken = source.Token;
-
-            var primeNum = BigInteger.One;
-
-            try
-            {
-                Parallel.For(1, int.MaxValue, po, (i, state) =>
-                {
-                    rngGen.GetBytes(byteArray);
-                    var randNum = new BigInteger(byteArray);
-                    if (!randNum.IsProbablyPrime()) return;
-                    lock (MyLock)
-                    {
-                        primeNum = randNum;
-                        source.Cancel();
-                    }
-                });
-            }
-            catch ( OperationCanceledException ) {}
-            return primeNum;
-        } */
-       
-       public static List<BigInteger> GenPrimeNum( int bits )
+        public static IEnumerable<BigInteger> GenPrimeNum( int bits )
         {
             var count = 3;
 
@@ -147,8 +125,26 @@ namespace Messenger
         } 
     }
 
+    class Keys
+    {
+        public string email { get; set; }
+        public string key { get; set; }  // make sure to be Base64
+
+        public override string ToString()
+        {
+            return email + "\n" + key;
+        }
+    }
+
+    class Messages
+    {
+        public string email { get; set; }
+        public string content { get; set; }  // make sure to be Base64
+    }
+
     class Program
     {
+        private static readonly HttpClient client = new HttpClient();
         private enum Options
         {
             KeyGen,
@@ -235,12 +231,31 @@ namespace Messenger
             //var publicBArr = LoadByteArray( e, n ); */
         }
 
+        private static async void GetKey( string email )
+        {
+            var response = client.GetAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email ).Result;
+            response.EnsureSuccessStatusCode();
+            
+            var respBody = response.Content.ReadAsStringAsync().Result;
+            var jsonObj = JsonConvert.DeserializeObject<Keys>( respBody );
+
+            await using ( var writer = new StreamWriter(email + ".key"))
+            {
+                writer.Write( respBody );
+            }
+            //var b64Key = jsonObj.key;
+            
+            Console.WriteLine( "email: {0}\nkey: {1}", jsonObj.email, jsonObj.key );
+
+        }
         public static void Main( string[] args )
         {
             if ( args.Length != 2 ) Usage();
             var option = GetOptions( args[0] );
             if ( option == Options.Invalid ) Usage( 1 );
             var email = args[1];
+
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             switch (option)
             {
@@ -255,6 +270,8 @@ namespace Messenger
                 case Options.SendKey:
                     break;
                 case Options.GetKey:
+                    GetKey( email );
+
                     break;
                 case Options.SendMsg:
                     break;
@@ -263,7 +280,7 @@ namespace Messenger
                 case Options.Invalid:
                     break;
                 default:
-                    break;
+                    throw new ArgumentOutOfRangeException();
             }
         }
     }
