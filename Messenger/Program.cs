@@ -15,6 +15,7 @@ using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -127,24 +128,19 @@ namespace Messenger
 
     class Keys
     {
-        public string email { get; set; }
-        public string key { get; set; }  // make sure to be Base64
-
-        public override string ToString()
-        {
-            return email + "\n" + key;
-        }
+        public string Email { get; set; }
+        public string Key { get; set; }  // make sure to be Base64
     }
 
     class Messages
     {
-        public string email { get; set; }
-        public string content { get; set; }  // make sure to be Base64
+        public string Email { get; set; }
+        public string Content { get; set; }  // make sure to be Base64
     }
 
     class Program
     {
-        private static readonly HttpClient client = new HttpClient();
+        private static readonly HttpClient Client = new HttpClient();
         private enum Options
         {
             KeyGen,
@@ -231,22 +227,64 @@ namespace Messenger
             //var publicBArr = LoadByteArray( e, n ); */
         }
 
-        private static async void GetKey( string email )
+        private static IEnumerable<BigInteger> DecodeKey( string base64Key )
         {
-            var response = client.GetAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email ).Result;
-            response.EnsureSuccessStatusCode();
+            var keyByte = Convert.FromBase64String( base64Key );
             
-            var respBody = response.Content.ReadAsStringAsync().Result;
-            var jsonObj = JsonConvert.DeserializeObject<Keys>( respBody );
-
-            await using ( var writer = new StreamWriter(email + ".key"))
+            var eByte = new byte[4];
+            Array.Copy( keyByte, 0, 
+                eByte, 0, 4 );
+            
+            Console.WriteLine("[{0}]", string.Join(", ", eByte));
+            
+            if ( BitConverter.IsLittleEndian )
             {
-                writer.Write( respBody );
+                Array.Reverse( eByte, 0, eByte.Length );
             }
-            //var b64Key = jsonObj.key;
-            
-            Console.WriteLine( "email: {0}\nkey: {1}", jsonObj.email, jsonObj.key );
+            var e = new BigInteger( eByte );
 
+            var byteE = new byte[ (int) e ];
+            Array.Copy(keyByte, 4, 
+                byteE, 0, (int) e );
+            if ( BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( byteE, 0, byteE.Length );
+            }
+            var E = new BigInteger( byteE ); 
+            
+            var nByte = new byte[4];
+            Array.Copy( keyByte, 4 + (int) e, 
+                nByte, 0, 4 );
+            if ( BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( nByte, 0, eByte.Length );
+            }
+            var n = new BigInteger( nByte );
+            
+            var byteN = new byte[ (int) n ];
+            Array.Copy(keyByte, 4 + (int) e + 4, 
+                byteN, 0, (int) n );
+            if ( !BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( byteN, 0, byteE.Length );
+            }
+            var N = new BigInteger( byteN );
+            
+            var enArr = new BigInteger[2] { E, N };
+            return enArr;
+        }
+
+        private static void RequestGetKey( string email )
+        {
+            var response = Client.GetAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email ).Result;
+            response.EnsureSuccessStatusCode();
+            var jsonObj = response.Content.ReadAsStringAsync().Result;
+            File.WriteAllText(email + ".key", jsonObj );
+        }
+
+        private static void RequestSendMsg( string email, string plaintext )
+        {
+            //var jsonObj = JsonConvert.DeserializeObject<Keys>( respBody );
         }
         public static void Main( string[] args )
         {
@@ -255,7 +293,7 @@ namespace Messenger
             if ( option == Options.Invalid ) Usage( 1 );
             var email = args[1];
 
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            Client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             switch (option)
             {
@@ -270,8 +308,7 @@ namespace Messenger
                 case Options.SendKey:
                     break;
                 case Options.GetKey:
-                    GetKey( email );
-
+                    RequestGetKey( email );
                     break;
                 case Options.SendMsg:
                     break;
