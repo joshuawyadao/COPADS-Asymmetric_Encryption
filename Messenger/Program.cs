@@ -22,6 +22,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+// TODO: ENCRYPTION, PRIME NUM GEN QUICKER
+
 namespace Messenger
 {
     internal static class Given
@@ -46,17 +48,17 @@ namespace Messenger
 
     internal class Keys
     {
-        public List<string> Email { get; set; }
+        public string Email { get; set; }
         public string Key { get; set; }  // make sure to be Base64
 
-        public Keys( List<string> email, string key )
+        public Keys( string email, string key )
         {
             Email = email;
             Key = key;
         }
     }
 
-    internal class Messages : IDisposable
+    internal class Messages
     {
         public string Email { get; set; }
         public string Content { get; set; }  // make sure to be Base64
@@ -66,15 +68,23 @@ namespace Messenger
             Email = email;
             Content = content;
         }
-
-        public void Dispose()
-        {
-            throw new NotImplementedException();
-        }
     }
 
     internal class Modifier
     {
+
+        private BigInteger DecodeLen( byte[] keyByte, int sIndex )
+        {
+            var eByte = new byte[4];
+            Array.Copy( keyByte, sIndex, 
+                eByte, 0, 4 );
+            if ( BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( eByte, 0, eByte.Length );
+            }
+            return new BigInteger( eByte );
+        }
+        
         public List<BigInteger> DecodeKey( string base64Key )
         {
             var keyByte = Convert.FromBase64String( base64Key );  // big endian
@@ -93,7 +103,7 @@ namespace Messenger
             var byteE = new byte[ (int) eBigInt ];
             Array.Copy(keyByte, 4, 
                 byteE, 0, (int) eBigInt );
-            if ( BitConverter.IsLittleEndian )
+            if ( !BitConverter.IsLittleEndian )
             {
                 Array.Reverse( byteE, 0, byteE.Length );
             }
@@ -105,7 +115,7 @@ namespace Messenger
                 nByte, 0, 4 );
             if ( BitConverter.IsLittleEndian )
             {
-                Array.Reverse( nByte, 0, eByte.Length );
+                Array.Reverse( nByte, 0, nByte.Length );
             }
             var nBigInt = new BigInteger( nByte );
             
@@ -122,16 +132,10 @@ namespace Messenger
             return new List<BigInteger> { e, n };
         }
 
-        public string EncryptKey( BigInteger e , BigInteger n )  // WRONG
+        public string EncodeKey( BigInteger e , BigInteger n )
         {
-            Console.WriteLine( "ENCRYPT: e: {0}", e);
-            //Console.WriteLine( "ENCRYPT: n: {0}", n);
-            
             var eByteSource = e.ToByteArray();  // little endian
             var nByteSource = n.ToByteArray();  // little endian
-            
-            Console.WriteLine( "ENCRYPT: e len: {0}", eByteSource.Length);
-            Console.WriteLine( "ENCRYPT: n len: {0}", nByteSource.Length);
 
             var byteArr = new byte[ 8 + eByteSource.Length + nByteSource.Length ];
 
@@ -140,7 +144,6 @@ namespace Messenger
             var tempE = BitConverter.GetBytes( eByteSource.Length );
             Array.Copy(tempE, 0,
             eLenBytes, 0, tempE.Length);
-            
             if ( BitConverter.IsLittleEndian )
             {
                 Array.Reverse( eLenBytes, 0, eLenBytes.Length );
@@ -152,7 +155,7 @@ namespace Messenger
             var eByteContents = new byte[ eByteSource.Length ];
             Array.Copy(eByteSource, 0, 
                 eByteContents, 0, eByteSource.Length);
-            if ( BitConverter.IsLittleEndian )
+            if ( !BitConverter.IsLittleEndian )
             {
                 Array.Reverse( eByteContents, 0, eByteContents.Length );
             }
@@ -164,7 +167,6 @@ namespace Messenger
             var tempN = BitConverter.GetBytes( nByteSource.Length );
             Array.Copy(tempN, 0,
                 nLenBytes, 0, tempN.Length);
-            
             if ( BitConverter.IsLittleEndian )
             {
                 Array.Reverse( nLenBytes, 0, nLenBytes.Length );
@@ -176,7 +178,7 @@ namespace Messenger
             var nByteContents = new byte[ nByteSource.Length ];
             Array.Copy(nByteSource, 0, 
                 nByteContents, 0, nByteSource.Length);
-            if ( BitConverter.IsLittleEndian )
+            if ( !BitConverter.IsLittleEndian )
             {
                 Array.Reverse( nByteContents, 0, nByteContents.Length );
             }
@@ -237,7 +239,7 @@ namespace Messenger
                     new StringContent(publicKeyJson, Encoding.UTF8, "application/json")).Result;
                 response.EnsureSuccessStatusCode();
 
-                privateKey.Email.Add(email);
+                // privateKey.Email.Add(email);
                 var privateKeyJson = JsonConvert.SerializeObject(privateKey, Formatting.Indented);
                 File.WriteAllText("private.key", privateKeyJson);
             }
@@ -251,11 +253,16 @@ namespace Messenger
             try
             {
                 var keyObj = JsonConvert.DeserializeObject<Keys>( File.ReadAllText( email + ".key" ) );
+                
                 var decodeEn = Mod.DecodeKey( keyObj.Key );
                 var e = decodeEn[0];
                 var n = decodeEn[1];
+                
+                Console.WriteLine("E: {0}\nN: {1}", e, n);
 
+                /*
                 var bigText = BigInteger.Parse(plaintext);
+                
                 var cypherText = (bigText ^ e) % n;
                 
                 var message = new Messages(email, Convert.ToBase64String(cypherText.ToByteArray()));
@@ -264,6 +271,7 @@ namespace Messenger
                 var response = Client.PutAsync("http://kayrun.cs.rit.edu:5000/Message/" + email,
                         new StringContent(messageJson, Encoding.UTF8, "application/json")).Result;
                 response.EnsureSuccessStatusCode();
+                */
             }
             catch (FileNotFoundException)
             {
@@ -278,6 +286,18 @@ namespace Messenger
 
             var jsonObj = response.Content.ReadAsStringAsync().Result;
             var keyObj = JsonConvert.DeserializeObject<Keys>(jsonObj);
+
+            var decodeEN1st = Mod.DecodeKey(keyObj.Key);
+            var e1st = decodeEN1st[0];
+            var n1st = decodeEN1st[1];
+            var decodeEN2nd = Mod.DecodeKey(Mod.EncodeKey(e1st, n1st));
+            var e2nd = decodeEN2nd[0];
+            var n2nd = decodeEN2nd[1];
+            
+            Console.WriteLine("e: {0}\nn: {1}", e1st, n2nd);
+            Console.WriteLine("e diff: {0}", e1st - e2nd);
+            Console.WriteLine("n diff: {0}", n1st - n2nd);
+            
             var newJsonObj = JsonConvert.SerializeObject(keyObj, Formatting.Indented);
 
             File.WriteAllText(email + ".key", newJsonObj);
@@ -378,6 +398,9 @@ namespace Messenger
                 case Options.SendMsg:
                     if ( args.Length != 3 ) Usage();
                     Request.SendMessage( args[1], args[2] );
+                    //var e = new BigInteger(65537);
+                    //Console.WriteLine("e: {0}", e);
+                    //Console.WriteLine("[{0}]", string.Join(", ", e.ToByteArray()));
                     break;
                 case Options.GetMsg:
                     if ( args.Length != 2 ) Usage();
