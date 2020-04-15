@@ -19,6 +19,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -72,62 +73,65 @@ namespace Messenger
 
     internal class Modifier
     {
-
         private BigInteger DecodeLen( byte[] keyByte, int sIndex )
         {
-            var eByte = new byte[4];
+            var lenByte = new byte[4];
             Array.Copy( keyByte, sIndex, 
-                eByte, 0, 4 );
+                lenByte, 0, 4 );
             if ( BitConverter.IsLittleEndian )
             {
-                Array.Reverse( eByte, 0, eByte.Length );
+                Array.Reverse( lenByte, 0, lenByte.Length );
             }
-            return new BigInteger( eByte );
+            return new BigInteger( lenByte );
+        }
+
+        private BigInteger DecodeContents(BigInteger bLen, byte[] keyByte, int sIndex )
+        {
+            var byteArr = new byte[ (int) bLen ];
+            Array.Copy(keyByte, sIndex, 
+                byteArr, 0, (int) bLen );
+            if ( !BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( byteArr, 0, byteArr.Length );
+            }
+            return new BigInteger( byteArr ); 
+        }
+
+        private void EncodeLen( byte[] source, int dIndex, ref byte[] byteArr )
+        {
+            var lenBytes = new byte[] { 0, 0, 0, 0 };
+            var tempE = BitConverter.GetBytes( source.Length );
+            Array.Copy(tempE, 0,
+                lenBytes, 0, tempE.Length);
+            if ( BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( lenBytes, 0, lenBytes.Length );
+            }
+            Array.Copy( lenBytes, 0, 
+                byteArr, dIndex, lenBytes.Length );
+        }
+
+        private void EncodeContents( byte[] source, int dIndex, ref byte[] byteArr)
+        {
+            var byteContents = new byte[ source.Length ];
+            Array.Copy(source, 0, 
+                byteContents, 0, source.Length);
+            if ( !BitConverter.IsLittleEndian )
+            {
+                Array.Reverse( byteContents, 0, byteContents.Length );
+            }
+            Array.Copy( byteContents, 0, 
+                byteArr, dIndex, byteContents.Length);
         }
         
         public List<BigInteger> DecodeKey( string base64Key )
         {
             var keyByte = Convert.FromBase64String( base64Key );  // big endian
 
-            // length of e
-            var eByte = new byte[4];
-            Array.Copy( keyByte, 0, 
-                eByte, 0, 4 );
-            if ( BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( eByte, 0, eByte.Length );
-            }
-            var eBigInt = new BigInteger( eByte );
-            
-            // contents of e
-            var byteE = new byte[ (int) eBigInt ];
-            Array.Copy(keyByte, 4, 
-                byteE, 0, (int) eBigInt );
-            if ( !BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( byteE, 0, byteE.Length );
-            }
-            var e = new BigInteger( byteE ); 
-            
-            // length of n
-            var nByte = new byte[4];
-            Array.Copy( keyByte, 4 + (int) eBigInt, 
-                nByte, 0, 4 );
-            if ( BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( nByte, 0, nByte.Length );
-            }
-            var nBigInt = new BigInteger( nByte );
-            
-            // contents of n
-            var byteN = new byte[ (int) nBigInt ];
-            Array.Copy(keyByte, 8 + (int) eBigInt, 
-                byteN, 0, (int) nBigInt );
-            if ( !BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( byteN, 0, byteE.Length );
-            }
-            var n = new BigInteger( byteN );
+            var eBigInt = DecodeLen( keyByte, 0 );  // length of e
+            var e = DecodeContents(eBigInt, keyByte, 4);  // contents of e
+            var nBigInt = DecodeLen(keyByte, 4 + (int) eBigInt);  // length of n
+            var n = DecodeContents(nBigInt, keyByte, 8 + (int) eBigInt);  // contents of n
             
             return new List<BigInteger> { e, n };
         }
@@ -139,51 +143,10 @@ namespace Messenger
 
             var byteArr = new byte[ 8 + eByteSource.Length + nByteSource.Length ];
 
-            // length of e
-            var eLenBytes = new byte[] { 0, 0, 0, 0 };
-            var tempE = BitConverter.GetBytes( eByteSource.Length );
-            Array.Copy(tempE, 0,
-            eLenBytes, 0, tempE.Length);
-            if ( BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( eLenBytes, 0, eLenBytes.Length );
-            }
-            Array.Copy( eLenBytes, 0, 
-            byteArr, 0, eLenBytes.Length );
-            
-            // contents of e
-            var eByteContents = new byte[ eByteSource.Length ];
-            Array.Copy(eByteSource, 0, 
-                eByteContents, 0, eByteSource.Length);
-            if ( !BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( eByteContents, 0, eByteContents.Length );
-            }
-            Array.Copy( eByteContents, 0, 
-                byteArr, 4, eByteContents.Length);
-            
-            // length of n
-            var nLenBytes = new byte[] { 0, 0, 0, 0 };
-            var tempN = BitConverter.GetBytes( nByteSource.Length );
-            Array.Copy(tempN, 0,
-                nLenBytes, 0, tempN.Length);
-            if ( BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( nLenBytes, 0, nLenBytes.Length );
-            }
-            Array.Copy( nLenBytes, 0, 
-                byteArr, 4 + eByteContents.Length, nLenBytes.Length );
-
-            // contents of n
-            var nByteContents = new byte[ nByteSource.Length ];
-            Array.Copy(nByteSource, 0, 
-                nByteContents, 0, nByteSource.Length);
-            if ( !BitConverter.IsLittleEndian )
-            {
-                Array.Reverse( nByteContents, 0, nByteContents.Length );
-            }
-            Array.Copy( nByteContents, 0, 
-                byteArr, 8 + eByteContents.Length, nByteContents.Length);
+            EncodeLen(eByteSource, 0, ref byteArr);  // length of e
+            EncodeContents(eByteSource, 4, ref byteArr);  // contents of e
+            EncodeLen(nByteSource, 4 + eByteSource.Length, ref byteArr);  // length of n
+            EncodeContents(nByteSource, 8 + eByteSource.Length, ref byteArr);  // contents of n
             
             return Convert.ToBase64String( byteArr );
         }
@@ -287,6 +250,7 @@ namespace Messenger
             var jsonObj = response.Content.ReadAsStringAsync().Result;
             var keyObj = JsonConvert.DeserializeObject<Keys>(jsonObj);
 
+            /*
             var decodeEN1st = Mod.DecodeKey(keyObj.Key);
             var e1st = decodeEN1st[0];
             var n1st = decodeEN1st[1];
@@ -297,6 +261,7 @@ namespace Messenger
             Console.WriteLine("e: {0}\nn: {1}", e1st, n2nd);
             Console.WriteLine("e diff: {0}", e1st - e2nd);
             Console.WriteLine("n diff: {0}", n1st - n2nd);
+            */
             
             var newJsonObj = JsonConvert.SerializeObject(keyObj, Formatting.Indented);
 
