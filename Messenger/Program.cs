@@ -46,17 +46,17 @@ namespace Messenger
 
     internal class Keys
     {
-        public string Email { get; set; }
+        public List<string> Email { get; set; }
         public string Key { get; set; }  // make sure to be Base64
 
-        public Keys( string email, string key )
+        public Keys( List<string> email, string key )
         {
             Email = email;
             Key = key;
         }
     }
 
-    internal class Messages
+    internal class Messages : IDisposable
     {
         public string Email { get; set; }
         public string Content { get; set; }  // make sure to be Base64
@@ -66,11 +66,16 @@ namespace Messenger
             Email = email;
             Content = content;
         }
+
+        public void Dispose()
+        {
+            throw new NotImplementedException();
+        }
     }
 
     internal class Modifier
     {
-        public IEnumerable<BigInteger> DecodeKey( string base64Key )
+        public List<BigInteger> DecodeKey( string base64Key )
         {
             var keyByte = Convert.FromBase64String( base64Key );  // big endian
 
@@ -114,8 +119,7 @@ namespace Messenger
             }
             var n = new BigInteger( byteN );
             
-            var enArr = new[] { e, n };
-            return enArr;
+            return new List<BigInteger> { e, n };
         }
 
         public string EncryptKey( BigInteger e , BigInteger n )  // WRONG
@@ -184,6 +188,7 @@ namespace Messenger
     }
     internal class ReqTasks
     {
+        private readonly Modifier Mod = new Modifier();
         private readonly HttpClient Client = new HttpClient();
         internal void GenerateKey( int keySize )
         {
@@ -222,44 +227,86 @@ namespace Messenger
         }
         internal void SendKey( string email )
         {
-            
-        }
-        
-        internal void GetKey( string email )
-        {
             try
             {
-                var response = Client.GetAsync("http://kayrun.cs.rit.edu:5000/Key/" + email).Result;
+                var privateKey = JsonConvert.DeserializeObject<Keys>(File.ReadAllText("private.key" ));
+                var publicKey = JsonConvert.DeserializeObject<Keys>(File.ReadAllText( "public.key" ));
+                var publicKeyJson = JsonConvert.SerializeObject(publicKey, Formatting.Indented);
+
+                var response = Client.PutAsync("http://kayrun.cs.rit.edu:5000/Key/" + email,
+                    new StringContent(publicKeyJson, Encoding.UTF8, "application/json")).Result;
                 response.EnsureSuccessStatusCode();
 
-                var jsonObj = response.Content.ReadAsStringAsync().Result;
-                var keyObj = JsonConvert.DeserializeObject<Keys>(jsonObj);
-                var newJsonObj = JsonConvert.SerializeObject(keyObj, Formatting.Indented);
-
-                File.WriteAllText(email + ".key", newJsonObj);
+                privateKey.Email.Add(email);
+                var privateKeyJson = JsonConvert.SerializeObject(privateKey, Formatting.Indented);
+                File.WriteAllText("private.key", privateKeyJson);
             }
-            catch (HttpRequestException) {}
+            catch (FileNotFoundException)
+            {
+                throw new FileNotFoundException("Cannot find " + email + ".key to send key");
+            }
         }
-
         internal void SendMessage( string email, string plaintext )
         {
             try
             {
                 var keyObj = JsonConvert.DeserializeObject<Keys>( File.ReadAllText( email + ".key" ) );
-                var mod = new Modifier();
-                var decodeEn = mod.DecodeKey( keyObj.Key );
-                var bigIntegers = decodeEn as BigInteger[] ?? decodeEn.ToArray();
+                var decodeEn = Mod.DecodeKey( keyObj.Key );
+                var e = decodeEn[0];
+                var n = decodeEn[1];
+
+                var bigText = BigInteger.Parse(plaintext);
+                var cypherText = (bigText ^ e) % n;
                 
+                var message = new Messages(email, Convert.ToBase64String(cypherText.ToByteArray()));
+                var messageJson = JsonConvert.SerializeObject(message, Formatting.Indented);
+
+                var response = Client.PutAsync("http://kayrun.cs.rit.edu:5000/Message/" + email,
+                        new StringContent(messageJson, Encoding.UTF8, "application/json")).Result;
+                response.EnsureSuccessStatusCode();
             }
             catch (FileNotFoundException)
             {
-                throw new FileNotFoundException("Cannot find user key to decode message");
+                throw new FileNotFoundException("Cannot find " + email + ".key to send message");
             }
+        }
+
+        internal void GetKey( string email )
+        {
+            var response = Client.GetAsync("http://kayrun.cs.rit.edu:5000/Key/" + email).Result;
+            response.EnsureSuccessStatusCode();
+
+            var jsonObj = response.Content.ReadAsStringAsync().Result;
+            var keyObj = JsonConvert.DeserializeObject<Keys>(jsonObj);
+            var newJsonObj = JsonConvert.SerializeObject(keyObj, Formatting.Indented);
+
+            File.WriteAllText(email + ".key", newJsonObj);
         }
 
         internal void GetMessage( string email )
         {
+            var response = Client.GetAsync("http://kayrun.cs.rit.edu:5000/Message/" + email).Result;
+            response.EnsureSuccessStatusCode();
+            
+            var jsonObj = response.Content.ReadAsStringAsync().Result;
+            var messageObj = JsonConvert.DeserializeObject<Messages>(jsonObj);
 
+            var privateKeyObj = JsonConvert.DeserializeObject<Keys>(File.ReadAllText("private.key" ));
+            
+            if (!privateKeyObj.Email.Contains(email))
+            {
+                throw new ArgumentException(email + " was not found in private.key. " +
+                                            "Please send " + email + " a key first" );
+            }
+            
+            var decodeEn = Mod.DecodeKey( privateKeyObj.Key );
+            var d = decodeEn[0];
+            var n = decodeEn[1];
+            
+            var cypherText = BigInteger.Parse(messageObj.Content);
+            var plainText = (cypherText ^ d) % n;
+            
+            Console.WriteLine(plainText);
         }
     }
     
