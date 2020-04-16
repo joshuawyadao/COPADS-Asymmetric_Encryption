@@ -301,8 +301,6 @@ namespace Messenger
                 var decodeEn = Mod.DecodeKey( keyObj.Key );
                 var e = decodeEn[0];
                 var n = decodeEn[1];
-                
-                Console.WriteLine( "E: {0}\nN: {1}", e, n );
 
                 var textByte = Encoding.UTF8.GetBytes( plaintext );
                 var bigText = new BigInteger( textByte );
@@ -321,6 +319,8 @@ namespace Messenger
             {
                 throw new FileNotFoundException("Cannot find " + email + ".key to send message" );
             }
+            
+            Console.WriteLine( "Sent '{0}' to {1}", plaintext, email );
         }
 
         /// <summary>
