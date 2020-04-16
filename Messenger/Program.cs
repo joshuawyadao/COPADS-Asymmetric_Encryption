@@ -35,8 +35,14 @@ namespace Messenger
         }
     }
 
+    /// <summary>
+    /// Class representation of the private.key stored on the disk
+    /// </summary>
     internal class PrivateKeys
     {
+        /// <summary>
+        /// List of emails
+        /// </summary>
         public List<string> Emails { get; set; }
         public string Key { get; set; }
     }
@@ -166,6 +172,9 @@ namespace Messenger
 
             File.WriteAllText( "public.key", publicKeyJson );
             File.WriteAllText("private.key", privateKeyJson );
+            
+            Console.WriteLine("e: {0}", e);
+            Console.WriteLine("n: {0}", n);
         }
         internal void SendKey( string email )
         {
@@ -207,7 +216,6 @@ namespace Messenger
                 var textByte = Encoding.UTF8.GetBytes(plaintext);
                 var bigText = new BigInteger(textByte);
                 
-                //var cypherText = (bigText ^ e) % n;
                 var cypherText = BigInteger.ModPow(bigText, e, n);
                 
                 var message = new Messages() { Email = email, 
@@ -244,24 +252,23 @@ namespace Messenger
             
             var jsonObj = response.Content.ReadAsStringAsync().Result;
             
-            Console.WriteLine("jsonObj: {0}", jsonObj);
-            
             var messageObj = JsonConvert.DeserializeObject<Messages>(jsonObj);
 
             var privateKeyObj = JsonConvert.DeserializeObject<PrivateKeys>(File.ReadAllText("private.key" ));
             
-            if (!privateKeyObj.Emails.Contains(email))
+            /*if (!privateKeyObj.Emails.Contains(email))
             {
                 throw new ArgumentException(email + " was not found in private.key. " +
                                             "Please send " + email + " a key first" );
-            }
+            } */
             
             var decodeEn = Mod.DecryptKey( privateKeyObj.Key );
             var d = decodeEn[0];
             var n = decodeEn[1];
-            
-            var cypherText = BigInteger.Parse(messageObj.Content);
-            //var plainText = (cypherText ^ d) % n;
+
+            var messageByte = Convert.FromBase64String(messageObj.Content);
+
+            var cypherText = new BigInteger(messageByte);
             var plainText = BigInteger.ModPow(cypherText, d, n);
 
             var textBytes = plainText.ToByteArray();
