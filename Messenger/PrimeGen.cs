@@ -8,7 +8,7 @@ namespace Messenger
 {
     internal static class Extension
     {
-        internal static bool IsProbablyPrime( this BigInteger value, int witnesses = 10 ) {
+        public static bool IsProbablyPrime( this BigInteger value, int witnesses = 10 ) {
             if ( value <= 1 ) return false;
             
             if ( witnesses <= 0 ) witnesses = 10;
@@ -47,11 +47,11 @@ namespace Messenger
     public class PrimeGen
     {
         private static readonly object MyLock = new object();
+        private static readonly RNGCryptoServiceProvider RngGen = new RNGCryptoServiceProvider();
 
-        public BigInteger GenPrimeNum( int bits, int count )
+        public BigInteger GenPrimeNum( int bytes, int count )
         {
             var numResults = 0;
-            var rngGen = new RNGCryptoServiceProvider();
             var po = new ParallelOptions();
             var source = new CancellationTokenSource();
             po.CancellationToken = source.Token;
@@ -63,19 +63,23 @@ namespace Messenger
             {
                 Parallel.For(0, int.MaxValue, po, (loop) =>
                 {
-                    var byteArray = new byte[ bits / 8 ];
-                    rngGen.GetBytes(byteArray);
-                    var randNum = new BigInteger( byteArray );
-
-                    lock ( MyLock )
+                    var byteArray = new byte[bytes / 8];
+                    RngGen.GetBytes(byteArray);
+                    var randNum = new BigInteger(byteArray);
+                    
+                    if (randNum.IsProbablyPrime())
                     {
-                        if ( randNum.IsProbablyPrime() && numResults < count )
+                        lock (MyLock)
                         {
-                            prime = randNum;
-                            Interlocked.Increment(ref numResults);
+                            if (numResults < count)
+                            {
+                                prime = randNum;
+                                Interlocked.Increment(ref numResults);
+                            }
                         }
                     }
-                    if ( numResults >= count )
+                    
+                    if (numResults >= count)
                     {
                         source.Cancel();
                     }

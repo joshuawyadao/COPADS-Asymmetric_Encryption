@@ -20,6 +20,7 @@
         <e p="private.key" t="Include" />
         <e p="Program.cs" t="Include" />
         <e p="public.key" t="Include" />
+        <e p="ramzallan@gmail.com.key" t="Include" />
         <e p="rrg2504@rit.edu.key" t="Include" />
         <e p="Secure_Messaging.pdf" t="Include" />
       </e>

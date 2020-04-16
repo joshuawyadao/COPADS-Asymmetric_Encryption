@@ -6,30 +6,18 @@
  */
 
 using System;
-using System.Buffers.Text;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Net.Sockets;
 using System.Numerics;
-using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-// TODO: ENCRYPTION, PRIME NUM GEN QUICKER
 
 namespace Messenger
 {
     internal static class Given
     {
-        public static BigInteger ModInverse( BigInteger a, BigInteger n )
+        internal static BigInteger ModInverse( BigInteger a, BigInteger n )
         {
             BigInteger i = n, v = 0, d = 1;
             while ( a > 0 )
@@ -47,33 +35,27 @@ namespace Messenger
         }
     }
 
+    internal class PrivateKeys
+    {
+        public List<string> Emails { get; set; }
+        public string Key { get; set; }
+    }
+    
     internal class Keys
     {
         public string Email { get; set; }
         public string Key { get; set; }  // make sure to be Base64
-
-        public Keys( string email, string key )
-        {
-            Email = email;
-            Key = key;
-        }
     }
 
     internal class Messages
     {
         public string Email { get; set; }
         public string Content { get; set; }  // make sure to be Base64
-
-        public Messages( string email, string content )
-        {
-            Email = email;
-            Content = content;
-        }
     }
 
     internal class Modifier
     {
-        private BigInteger DecodeLen( byte[] keyByte, int sIndex )
+        private BigInteger DecryptLen( byte[] keyByte, int sIndex )
         {
             var lenByte = new byte[4];
             Array.Copy( keyByte, sIndex, 
@@ -82,10 +64,11 @@ namespace Messenger
             {
                 Array.Reverse( lenByte, 0, lenByte.Length );
             }
+            //Console.WriteLine("[{0}]", string.Join(", ", lenByte));
             return new BigInteger( lenByte );
         }
 
-        private BigInteger DecodeContents(BigInteger bLen, byte[] keyByte, int sIndex )
+        private BigInteger DecryptContents(BigInteger bLen, byte[] keyByte, int sIndex )
         {
             var byteArr = new byte[ (int) bLen ];
             Array.Copy(keyByte, sIndex, 
@@ -97,7 +80,7 @@ namespace Messenger
             return new BigInteger( byteArr ); 
         }
 
-        private void EncodeLen( byte[] source, int dIndex, ref byte[] byteArr )
+        private void EncryptLen( byte[] source, int dIndex, ref byte[] byteArr )
         {
             var lenBytes = new byte[] { 0, 0, 0, 0 };
             var tempE = BitConverter.GetBytes( source.Length );
@@ -111,7 +94,7 @@ namespace Messenger
                 byteArr, dIndex, lenBytes.Length );
         }
 
-        private void EncodeContents( byte[] source, int dIndex, ref byte[] byteArr)
+        private void EncryptContents( byte[] source, int dIndex, ref byte[] byteArr)
         {
             var byteContents = new byte[ source.Length ];
             Array.Copy(source, 0, 
@@ -124,29 +107,29 @@ namespace Messenger
                 byteArr, dIndex, byteContents.Length);
         }
         
-        public List<BigInteger> DecodeKey( string base64Key )
+        public List<BigInteger> DecryptKey( string base64Key )
         {
             var keyByte = Convert.FromBase64String( base64Key );  // big endian
 
-            var eBigInt = DecodeLen( keyByte, 0 );  // length of e
-            var e = DecodeContents(eBigInt, keyByte, 4);  // contents of e
-            var nBigInt = DecodeLen(keyByte, 4 + (int) eBigInt);  // length of n
-            var n = DecodeContents(nBigInt, keyByte, 8 + (int) eBigInt);  // contents of n
+            var eBigInt = DecryptLen( keyByte, 0 );  // length of e
+            var e = DecryptContents(eBigInt, keyByte, 4);  // contents of e
+            var nBigInt = DecryptLen(keyByte, 4 + (int) eBigInt);  // length of n
+            var n = DecryptContents(nBigInt, keyByte, 8 + (int) eBigInt);  // contents of n
             
             return new List<BigInteger> { e, n };
         }
 
-        public string EncodeKey( BigInteger e , BigInteger n )
+        public string EncryptKey( BigInteger e , BigInteger n )
         {
             var eByteSource = e.ToByteArray();  // little endian
             var nByteSource = n.ToByteArray();  // little endian
 
             var byteArr = new byte[ 8 + eByteSource.Length + nByteSource.Length ];
 
-            EncodeLen(eByteSource, 0, ref byteArr);  // length of e
-            EncodeContents(eByteSource, 4, ref byteArr);  // contents of e
-            EncodeLen(nByteSource, 4 + eByteSource.Length, ref byteArr);  // length of n
-            EncodeContents(nByteSource, 8 + eByteSource.Length, ref byteArr);  // contents of n
+            EncryptLen(eByteSource, 0, ref byteArr);  // length of e
+            EncryptContents(eByteSource, 4, ref byteArr);  // contents of e
+            EncryptLen(nByteSource, 4 + eByteSource.Length, ref byteArr);  // length of n
+            EncryptContents(nByteSource, 8 + eByteSource.Length, ref byteArr);  // contents of n
             
             return Convert.ToBase64String( byteArr );
         }
@@ -157,54 +140,52 @@ namespace Messenger
         private readonly HttpClient Client = new HttpClient();
         internal void GenerateKey( int keySize )
         {
-            // SLOW PLEASE FIX!!!
-            //var rand = new Random();
-            //var firstSize = keySize / 2 + rand.Next( -keySize / 5, keySize / 5 );
-
-            Console.WriteLine("GENERATING KEYS!!!");
-            
             var primeGen = new PrimeGen();
-            var firstSize = keySize/2;
-            BigInteger p = primeGen.GenPrimeNum( firstSize, 1 );
-            //var q = primeGen.GenPrimeNum( firstSize );
-            Console.WriteLine("p:{0}", p);
-            //Console.WriteLine("p:{0}\nq:{1}", p, q );
-
-            /*
+            var rand = new Random();
+            
+            var factor = rand.Next( 5, 10 );
+            var firstSize = (keySize / 2) + rand.Next(-keySize / factor, keySize / factor);
+            
+            var p = primeGen.GenPrimeNum( firstSize, 1 );
+            var q = primeGen.GenPrimeNum( keySize - firstSize, 1 );
+            
             var n = p * q;
             var r = ( p - 1 ) * ( q - 1 );
-            var e = Extension.GenPrimeNum( 2 ^ 16 );
-            var d = Extension.ModInverse( e, r ); 
+            var e = primeGen.GenPrimeNum( 16, 1 );
+            var d = Given.ModInverse( e, r ); 
 
             // below works fine
-            var publicKeyStr = EncryptKey( e, n );
-            var privateKeyStr = EncryptKey( d, n );
+            var publicKeyStr = Mod.EncryptKey( e, n );
+            var privateKeyStr = Mod.EncryptKey( d, n );
 
-            var publicKey = new Keys( "", publicKeyStr );
-            var privateKey = new Keys( "", privateKeyStr );
+            var publicKey = new Keys() { Email = "", Key = publicKeyStr };
+            var privateKey = new PrivateKeys() { Emails = new List<string>(), Key = privateKeyStr };
 
             var publicKeyJson = JsonConvert.SerializeObject( publicKey, Formatting.Indented );
-            var privateKeyJson = JsonConvert.SerializeObject(privateKey, Formatting.Indented);
+            var privateKeyJson = JsonConvert.SerializeObject( privateKey, Formatting.Indented );
 
             File.WriteAllText( "public.key", publicKeyJson );
-            File.WriteAllText( "private.key", privateKeyJson );
-            */
+            File.WriteAllText("private.key", privateKeyJson );
         }
         internal void SendKey( string email )
         {
             try
             {
-                var privateKey = JsonConvert.DeserializeObject<Keys>(File.ReadAllText("private.key" ));
-                var publicKey = JsonConvert.DeserializeObject<Keys>(File.ReadAllText( "public.key" ));
+                var privateKey = JsonConvert.DeserializeObject<PrivateKeys>(File.ReadAllText("private.key" ));
+                var publicKey = JsonConvert.DeserializeObject<Keys>( File.ReadAllText( "public.key" ) );
+                
+                publicKey.Email = email;
+                
                 var publicKeyJson = JsonConvert.SerializeObject(publicKey, Formatting.Indented);
 
                 var response = Client.PutAsync("http://kayrun.cs.rit.edu:5000/Key/" + email,
                     new StringContent(publicKeyJson, Encoding.UTF8, "application/json")).Result;
                 response.EnsureSuccessStatusCode();
 
-                // privateKey.Email.Add(email);
+                privateKey.Emails.Add(email);
                 var privateKeyJson = JsonConvert.SerializeObject(privateKey, Formatting.Indented);
                 File.WriteAllText("private.key", privateKeyJson);
+                
             }
             catch (FileNotFoundException)
             {
@@ -217,24 +198,25 @@ namespace Messenger
             {
                 var keyObj = JsonConvert.DeserializeObject<Keys>( File.ReadAllText( email + ".key" ) );
                 
-                var decodeEn = Mod.DecodeKey( keyObj.Key );
+                var decodeEn = Mod.DecryptKey( keyObj.Key );
                 var e = decodeEn[0];
                 var n = decodeEn[1];
                 
                 Console.WriteLine("E: {0}\nN: {1}", e, n);
 
-                /*
-                var bigText = BigInteger.Parse(plaintext);
+                var textByte = Encoding.UTF8.GetBytes(plaintext);
+                var bigText = new BigInteger(textByte);
                 
-                var cypherText = (bigText ^ e) % n;
+                //var cypherText = (bigText ^ e) % n;
+                var cypherText = BigInteger.ModPow(bigText, e, n);
                 
-                var message = new Messages(email, Convert.ToBase64String(cypherText.ToByteArray()));
+                var message = new Messages() { Email = email, 
+                    Content = Convert.ToBase64String(cypherText.ToByteArray())};
                 var messageJson = JsonConvert.SerializeObject(message, Formatting.Indented);
 
                 var response = Client.PutAsync("http://kayrun.cs.rit.edu:5000/Message/" + email,
                         new StringContent(messageJson, Encoding.UTF8, "application/json")).Result;
                 response.EnsureSuccessStatusCode();
-                */
             }
             catch (FileNotFoundException)
             {
@@ -249,19 +231,6 @@ namespace Messenger
 
             var jsonObj = response.Content.ReadAsStringAsync().Result;
             var keyObj = JsonConvert.DeserializeObject<Keys>(jsonObj);
-
-            /*
-            var decodeEN1st = Mod.DecodeKey(keyObj.Key);
-            var e1st = decodeEN1st[0];
-            var n1st = decodeEN1st[1];
-            var decodeEN2nd = Mod.DecodeKey(Mod.EncodeKey(e1st, n1st));
-            var e2nd = decodeEN2nd[0];
-            var n2nd = decodeEN2nd[1];
-            
-            Console.WriteLine("e: {0}\nn: {1}", e1st, n2nd);
-            Console.WriteLine("e diff: {0}", e1st - e2nd);
-            Console.WriteLine("n diff: {0}", n1st - n2nd);
-            */
             
             var newJsonObj = JsonConvert.SerializeObject(keyObj, Formatting.Indented);
 
@@ -274,24 +243,35 @@ namespace Messenger
             response.EnsureSuccessStatusCode();
             
             var jsonObj = response.Content.ReadAsStringAsync().Result;
+            
+            Console.WriteLine("jsonObj: {0}", jsonObj);
+            
             var messageObj = JsonConvert.DeserializeObject<Messages>(jsonObj);
 
-            var privateKeyObj = JsonConvert.DeserializeObject<Keys>(File.ReadAllText("private.key" ));
+            var privateKeyObj = JsonConvert.DeserializeObject<PrivateKeys>(File.ReadAllText("private.key" ));
             
-            if (!privateKeyObj.Email.Contains(email))
+            if (!privateKeyObj.Emails.Contains(email))
             {
                 throw new ArgumentException(email + " was not found in private.key. " +
                                             "Please send " + email + " a key first" );
             }
             
-            var decodeEn = Mod.DecodeKey( privateKeyObj.Key );
+            var decodeEn = Mod.DecryptKey( privateKeyObj.Key );
             var d = decodeEn[0];
             var n = decodeEn[1];
             
             var cypherText = BigInteger.Parse(messageObj.Content);
-            var plainText = (cypherText ^ d) % n;
+            //var plainText = (cypherText ^ d) % n;
+            var plainText = BigInteger.ModPow(cypherText, d, n);
+
+            var textBytes = plainText.ToByteArray();
+
+            if (!BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(textBytes, 0, textBytes.Length);
+            }
             
-            Console.WriteLine(plainText);
+            Console.WriteLine(Encoding.UTF8.GetString(textBytes));
         }
     }
     
@@ -344,7 +324,6 @@ namespace Messenger
             if ( args.Length < 2 || args.Length > 3 ) Usage();
             var option = GetOptions( args[0] );
             if ( option == Options.Invalid ) Usage( 1 );
-            //Client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             switch (option)
             {
@@ -356,16 +335,13 @@ namespace Messenger
                     if ( args.Length != 2 ) Usage();
                     Request.SendKey( args[1] );
                     break;
-                case Options.GetKey:  // WORKS FINE!!!
+                case Options.GetKey:
                     if ( args.Length != 2 ) Usage();
                     Request.GetKey( args[1] );
                     break;
                 case Options.SendMsg:
                     if ( args.Length != 3 ) Usage();
                     Request.SendMessage( args[1], args[2] );
-                    //var e = new BigInteger(65537);
-                    //Console.WriteLine("e: {0}", e);
-                    //Console.WriteLine("[{0}]", string.Join(", ", e.ToByteArray()));
                     break;
                 case Options.GetMsg:
                     if ( args.Length != 2 ) Usage();
