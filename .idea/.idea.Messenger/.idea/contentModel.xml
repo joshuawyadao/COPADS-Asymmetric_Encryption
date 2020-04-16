@@ -6,8 +6,7 @@
     <e p="C:\Users\Josh\Documents\Notes\2019-2020\Spring Sem\Conc of Par &amp; Dist Systems\Project 3\Messenger" t="IncludeFlat">
       <e p="Messenger" t="IncludeRecursive">
         <e p="bin" t="ExcludeRecursive" />
-        <e p="jeremy.brown@rit.edu.key" t="Include" />
-        <e p="jsb@cs.rit.edu.key" t="Include" />
+        <e p="jwy4877@rit.edu.key" t="Include" />
         <e p="Messenger.csproj" t="IncludeRecursive" />
         <e p="obj" t="ExcludeRecursive">
           <e p="Debug" t="Include">
@@ -20,7 +19,6 @@
         <e p="private.key" t="Include" />
         <e p="Program.cs" t="Include" />
         <e p="public.key" t="Include" />
-        <e p="ramzallan@gmail.com.key" t="Include" />
         <e p="rrg2504@rit.edu.key" t="Include" />
         <e p="Secure_Messaging.pdf" t="Include" />
       </e>
