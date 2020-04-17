@@ -8,7 +8,7 @@ namespace Messenger
 {
     internal static class Extension
     {
-        public static bool IsProbablyPrime( this BigInteger value, int witnesses = 10 ) {
+        internal static bool IsProbablyPrime( this BigInteger value, int witnesses = 10 ) {
             if ( value <= 1 ) return false;
             
             if ( witnesses <= 0 ) witnesses = 10;
@@ -44,12 +44,12 @@ namespace Messenger
             return true;
         }
     }
-    public class PrimeGen
+    internal class PrimeGen
     {
         private static readonly object MyLock = new object();
         private static readonly RNGCryptoServiceProvider RngGen = new RNGCryptoServiceProvider();
 
-        public BigInteger GenPrimeNum( int bytes, int count )
+        internal BigInteger GenPrimeNum( int bytes, int count )
         {
             var numResults = 0;
             var po = new ParallelOptions();

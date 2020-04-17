@@ -5,11 +5,6 @@
  * 17 April 2020
  */
 
-/** 
- * TODO: Check is size of message > something
- * TODO: update usage for user to clearly give help
- */
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -104,10 +99,11 @@ namespace Messenger
             var lenByte = new byte[4];
             Array.Copy( keyByte, sIndex, 
                 lenByte, 0, 4 );
-            if ( BitConverter.IsLittleEndian )
+            if (BitConverter.IsLittleEndian)
             {
-                Array.Reverse( lenByte, 0, lenByte.Length );
+                Array.Reverse(lenByte, 0, lenByte.Length);
             }
+
             return new BigInteger( lenByte );
         }
 
@@ -123,10 +119,11 @@ namespace Messenger
             var byteArr = new byte[ (int) bLen ];
             Array.Copy(keyByte, sIndex, 
                 byteArr, 0, (int) bLen );
-            if ( !BitConverter.IsLittleEndian )
+            if (!BitConverter.IsLittleEndian)
             {
-                Array.Reverse( byteArr, 0, byteArr.Length );
+                Array.Reverse(byteArr, 0, byteArr.Length);
             }
+
             return new BigInteger( byteArr ); 
         }
 
@@ -142,10 +139,11 @@ namespace Messenger
             var tempE = BitConverter.GetBytes( source.Length );
             Array.Copy(tempE, 0,
                 lenBytes, 0, tempE.Length );
-            if ( BitConverter.IsLittleEndian )
+            if (BitConverter.IsLittleEndian)
             {
-                Array.Reverse( lenBytes, 0, lenBytes.Length );
+                Array.Reverse(lenBytes, 0, lenBytes.Length);
             }
+
             Array.Copy( lenBytes, 0, 
                 byteArr, dIndex, lenBytes.Length );
         }
@@ -161,10 +159,11 @@ namespace Messenger
             var byteContents = new byte[ source.Length ];
             Array.Copy(source, 0, 
                 byteContents, 0, source.Length );
-            if ( !BitConverter.IsLittleEndian )
+            if (!BitConverter.IsLittleEndian)
             {
-                Array.Reverse( byteContents, 0, byteContents.Length );
+                Array.Reverse(byteContents, 0, byteContents.Length);
             }
+
             Array.Copy( byteContents, 0, 
                 byteArr, dIndex, byteContents.Length );
         }
@@ -176,7 +175,7 @@ namespace Messenger
         /// </summary>
         /// <param name="base64Key">Base64 key to decode</param>
         /// <returns>list of BigInt</returns>
-        public List<BigInteger> DecodeKey( string base64Key )
+        internal List<BigInteger> DecodeKey( string base64Key )
         {
             var keyByte = Convert.FromBase64String( base64Key );  // big endian
 
@@ -194,7 +193,7 @@ namespace Messenger
         /// <param name="e">e or d to be encoded</param>
         /// <param name="n">n to be encoded</param>
         /// <returns>Base64 encoded key</returns>
-        public string EncodeKey( BigInteger e , BigInteger n )
+        internal string EncodeKey( BigInteger e , BigInteger n )
         {
             var eByteSource = e.ToByteArray();  // little endian
             var nByteSource = n.ToByteArray();  // little endian
@@ -259,7 +258,7 @@ namespace Messenger
             File.WriteAllText( "public.key", publicKeyJson );
             File.WriteAllText("private.key", privateKeyJson );
             
-            Console.WriteLine("Successfully generated private and public keys and stored the on the disk!");
+            Console.WriteLine( "Successfully generated private and public keys and stored the on the disk!" );
         }
         
         /// <summary>
@@ -268,22 +267,31 @@ namespace Messenger
         /// <param name="email">Profile where the public key will be registered</param>
         internal void SendKey( string email )
         {
-            var privateKey = JsonConvert.DeserializeObject<PrivateKeys>(File.ReadAllText( "private.key" ));
-            var publicKey = JsonConvert.DeserializeObject<Keys>( File.ReadAllText( "public.key" ) );
-            
-            publicKey.Email = email;
-            
-            var publicKeyJson = JsonConvert.SerializeObject( publicKey, Formatting.Indented );
+            try
+            {
+                var privateKey = JsonConvert.DeserializeObject<PrivateKeys>(File.ReadAllText( "private.key" ) );
+                var publicKey = JsonConvert.DeserializeObject<Keys>(File.ReadAllText( "public.key" ) );
 
-            var response = Client.PutAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email,
-                new StringContent( publicKeyJson, Encoding.UTF8, "application/json" ) ).Result;
-            response.EnsureSuccessStatusCode();
+                publicKey.Email = email;
 
-            privateKey.Emails.Add( email );
-            var privateKeyJson = JsonConvert.SerializeObject( privateKey, Formatting.Indented );
-            File.WriteAllText( "private.key", privateKeyJson );
-            
-            Console.WriteLine( "Sent key to {0}!", email );
+                var publicKeyJson = JsonConvert.SerializeObject( publicKey, Formatting.Indented );
+
+                var response = Client.PutAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email,
+                    new StringContent( publicKeyJson, Encoding.UTF8, "application/json" ) ).Result;
+                response.EnsureSuccessStatusCode();
+
+                if ( !privateKey.Emails.Contains( email ) ) privateKey.Emails.Add( email );
+                var privateKeyJson = JsonConvert.SerializeObject( privateKey, Formatting.Indented );
+
+                File.WriteAllText( "private.key", privateKeyJson );
+
+                Console.WriteLine( "Sent key to {0}!", email );
+            }
+            catch ( FileNotFoundException )
+            {
+                throw new FileNotFoundException( 
+                    "Cannot find public or private key, please generate a key first" );
+            }
         }
         
         /// <summary>
@@ -317,10 +325,11 @@ namespace Messenger
             }
             catch ( FileNotFoundException )
             {
-                throw new FileNotFoundException("Cannot find " + email + ".key to send message" );
+                throw new FileNotFoundException(
+                    "Cannot find {0}.key to send message. Please download the public key first.", email );
             }
             
-            Console.WriteLine( "Sent '{0}' to {1}", plaintext, email );
+            Console.WriteLine( "Sent message to {0}.", email );
         }
 
         /// <summary>
@@ -339,7 +348,7 @@ namespace Messenger
 
             File.WriteAllText( email + ".key", newJsonObj );
 
-            Console.WriteLine( "Successfully got key from {0}", email );
+            Console.WriteLine( "Successfully got key from {0}.", email );
         }
 
         /// <summary>
@@ -349,38 +358,45 @@ namespace Messenger
         /// <exception cref="ArgumentException">Location is not registered in private.key</exception>
         internal void GetMessage( string email )
         {
-            var response = Client.GetAsync("http://kayrun.cs.rit.edu:5000/Message/" + email ).Result;
-            response.EnsureSuccessStatusCode();
-            
-            var jsonObj = response.Content.ReadAsStringAsync().Result;
-            
-            var messageObj = JsonConvert.DeserializeObject<Messages>( jsonObj );
-
-            var privateKeyObj = JsonConvert.DeserializeObject<PrivateKeys>( File.ReadAllText("private.key" ) );
-            
-            if ( !privateKeyObj.Emails.Contains( email ) )
+            try
             {
-                throw new ArgumentException( email + " was not found in private.key. " +
-                                            "Please send " + email + " a key first" );
+                var response = Client.GetAsync( "http://kayrun.cs.rit.edu:5000/Message/" + email ).Result;
+                response.EnsureSuccessStatusCode();
+
+                var jsonObj = response.Content.ReadAsStringAsync().Result;
+
+                var messageObj = JsonConvert.DeserializeObject<Messages>( jsonObj );
+
+                var privateKeyObj = JsonConvert.DeserializeObject<PrivateKeys>( File.ReadAllText( "private.key" ) );
+
+                if ( !privateKeyObj.Emails.Contains( email) )
+                {
+                    throw new ArgumentException( "Message could not be decoded." );
+                }
+
+                var decodeEn = Mod.DecodeKey( privateKeyObj.Key );
+                var d = decodeEn[0];
+                var n = decodeEn[1];
+
+                var messageByte = Convert.FromBase64String( messageObj.Content );
+
+                var cypherText = new BigInteger( messageByte );
+                var plainText = BigInteger.ModPow(cypherText, d, n );
+
+                var textBytes = plainText.ToByteArray();
+
+                if ( !BitConverter.IsLittleEndian )
+                {
+                    Array.Reverse( textBytes, 0, textBytes.Length );
+                }
+
+                Console.WriteLine( Encoding.UTF8.GetString( textBytes ) );
             }
-            
-            var decodeEn = Mod.DecodeKey( privateKeyObj.Key );
-            var d = decodeEn[0];
-            var n = decodeEn[1];
-
-            var messageByte = Convert.FromBase64String( messageObj.Content );
-
-            var cypherText = new BigInteger( messageByte );
-            var plainText = BigInteger.ModPow( cypherText, d, n );
-
-            var textBytes = plainText.ToByteArray();
-
-            if ( !BitConverter.IsLittleEndian )
+            catch ( FileNotFoundException )
             {
-                Array.Reverse( textBytes, 0, textBytes.Length );
+                throw new FileNotFoundException( 
+                    "Private key not found, please generate a key and send it out first.");
             }
-            
-            Console.WriteLine( Encoding.UTF8.GetString( textBytes ) );
         }
     }
     
@@ -407,19 +423,49 @@ namespace Messenger
         /// <summary>
         /// Prints out the command line usage for the user
         /// </summary>
-        /// <param name="variation">variation to print</param>
-        private static void Usage( int variation = 0 )
+        /// <param name="opt">user options to describe</param>
+        private static void Usage( Options opt )
         {
-            switch ( variation )
+            switch ( opt )
             {
-                case 1:
-                    Console.WriteLine( "<options>: keyGen, sendKey, getKey, sendMsg, getMsg" );
+                case Options.KeyGen:
+                    Console.WriteLine( "{0}\n{1}\n{2}\n{3}", 
+                        "Usage: keyGen <keysize>",
+                        "<keysize>: total combined size in bits for both the public and private key", 
+                        "- public key stored as 'public.key'",
+                        "- private key stored as 'private.key'" );
+                    break;
+                case Options.SendKey:
+                    Console.WriteLine( "{0}\n{1}", 
+                        "Usage: sendKey <email>",
+                        "<email>: sends the public key to the server and registers <email>" );
+                    break;
+                case Options.GetKey:
+                    Console.WriteLine( "{0}\n{1}\n{2}", 
+                        "Usage: getKey <email>",
+                        "<email>: retrieve a base64 encoded public key for the <email> user",
+                        "- stored as <email>.key" );
+                    break;
+                case Options.SendMsg:
+                    Console.WriteLine( "{0}\n{1}\n{2}", 
+                        "Usage: sendMsg <email> <plaintext>",
+                        "<email>: recipient of message",
+                        "<plaintext>: message to be base64 encoded and sent out" );
+                    break;
+                case Options.GetMsg:
+                    Console.WriteLine( "{0}\n{1}", 
+                        "Usage: getMsg <email>",
+                        "<email>: retrieve base64 encoded message from <email> and display it." );
+                    break;
+                case Options.Invalid:
+                    Console.WriteLine( "{0}\n{1}", 
+                        "Usage: dotnet run <option> <other arguments>",
+                        "<option>: keyGen, sendKey, getKey, sendMsg, getMsg" );
                     break;
                 default:
-                    Console.WriteLine( "dotnet run <option> <other arguments>\n" );
-                    Console.WriteLine( "{0,15}", "<options>: keyGen, sendKey, getKey, sendMsg, getMsg" );
-                    Console.WriteLine( "{0,29}", "<keyGen> <keysize>");
-                    Console.WriteLine( "{0,60}", "<keysize>: size of keys generated" );
+                    Console.WriteLine( "{0}\n{1}", 
+                        "Usage: dotnet run <option> <other arguments>",
+                        "<option>: keyGen, sendKey, getKey, sendMsg, getMsg" );
                     break;
             }
             Environment.Exit( 1 );
@@ -446,36 +492,38 @@ namespace Messenger
         
         public static void Main( string[] args )
         {
-            if ( args.Length < 2 || args.Length > 3 ) Usage();
+            if ( args.Length < 1 ) Usage( Options.Invalid );
             var option = GetOptions( args[0] );
-            if ( option == Options.Invalid ) Usage( 1 );
+            if ( option == Options.Invalid ) Usage( Options.Invalid );
 
-            switch (option)
+            switch ( option )
             {
                 case Options.KeyGen:
-                    if ( args.Length != 2 ) Usage();
+                    if ( args.Length != 2 ) Usage( Options.KeyGen );
                     Request.GenerateKey( Convert.ToInt32( args[1] ) );
                     break;
                 case Options.SendKey:
-                    if ( args.Length != 2 ) Usage();
+                    if ( args.Length != 2 ) Usage( Options.SendKey );
                     Request.SendKey( args[1] );
                     break;
                 case Options.GetKey:
-                    if ( args.Length != 2 ) Usage();
+                    if ( args.Length != 2 ) Usage( Options.GetKey );
                     Request.GetKey( args[1] );
                     break;
                 case Options.SendMsg:
-                    if ( args.Length != 3 ) Usage();
+                    if ( args.Length != 3 ) Usage( Options.SendMsg );
                     Request.SendMessage( args[1], args[2] );
                     break;
                 case Options.GetMsg:
-                    if ( args.Length != 2 ) Usage();
+                    if ( args.Length != 2 ) Usage( Options.GetMsg );
                     Request.GetMessage( args[1] );
                     break;
                 case Options.Invalid:
+                    Usage( Options.Invalid );
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    Usage( Options.Invalid );
+                    break;
             }
         }
     }
