@@ -217,12 +217,12 @@ namespace Messenger
         /// <summary>
         /// Modifier object to modify the keys
         /// </summary>
-        private readonly Modifier Mod = new Modifier();
+        private readonly Modifier _mod = new Modifier();
         
         /// <summary>
         /// HttpClient to interact with the server
         /// </summary>
-        private readonly HttpClient Client = new HttpClient();
+        private readonly HttpClient _client = new HttpClient();
         
         /// <summary>
         /// Generate a private and public key and store them on the disk as private.key and public.key
@@ -243,11 +243,11 @@ namespace Messenger
             
             var n = p * q;
             var r = ( p - 1 ) * ( q - 1 );
-            var e = primeGen.GenPrimeNum( 16, 1 );
+            var e = primeGen.GenPrimeNum( 32, 1 );
             var d = Given.ModInverse( e, r );
             
-            var publicKeyStr = Mod.EncodeKey( e, n );
-            var privateKeyStr = Mod.EncodeKey( d, n );
+            var publicKeyStr = _mod.EncodeKey( e, n );
+            var privateKeyStr = _mod.EncodeKey( d, n );
 
             var publicKey = new Keys() { Email = "", Key = publicKeyStr };
             var privateKey = new PrivateKeys() { Emails = new List<string>(), Key = privateKeyStr };
@@ -276,7 +276,7 @@ namespace Messenger
 
                 var publicKeyJson = JsonConvert.SerializeObject( publicKey, Formatting.Indented );
 
-                var response = Client.PutAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email,
+                var response = _client.PutAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email,
                     new StringContent( publicKeyJson, Encoding.UTF8, "application/json" ) ).Result;
                 response.EnsureSuccessStatusCode();
 
@@ -306,7 +306,7 @@ namespace Messenger
             {
                 var keyObj = JsonConvert.DeserializeObject<Keys>( File.ReadAllText( email + ".key" ) );
                 
-                var decodeEn = Mod.DecodeKey( keyObj.Key );
+                var decodeEn = _mod.DecodeKey( keyObj.Key );
                 var e = decodeEn[0];
                 var n = decodeEn[1];
 
@@ -319,7 +319,7 @@ namespace Messenger
                     Content = Convert.ToBase64String( cypherText.ToByteArray() ) };
                 var messageJson = JsonConvert.SerializeObject( message, Formatting.Indented );
 
-                var response = Client.PutAsync( "http://kayrun.cs.rit.edu:5000/Message/" + email,
+                var response = _client.PutAsync( "http://kayrun.cs.rit.edu:5000/Message/" + email,
                         new StringContent( messageJson, Encoding.UTF8, "application/json" ) ).Result;
                 response.EnsureSuccessStatusCode();
             }
@@ -338,7 +338,7 @@ namespace Messenger
         /// <param name="email">Email location to receive the public key from</param>
         internal void GetKey( string email )
         {
-            var response = Client.GetAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email ).Result;
+            var response = _client.GetAsync( "http://kayrun.cs.rit.edu:5000/Key/" + email ).Result;
             response.EnsureSuccessStatusCode();
 
             var jsonObj = response.Content.ReadAsStringAsync().Result;
@@ -360,7 +360,7 @@ namespace Messenger
         {
             try
             {
-                var response = Client.GetAsync( "http://kayrun.cs.rit.edu:5000/Message/" + email ).Result;
+                var response = _client.GetAsync( "http://kayrun.cs.rit.edu:5000/Message/" + email ).Result;
                 response.EnsureSuccessStatusCode();
 
                 var jsonObj = response.Content.ReadAsStringAsync().Result;
@@ -374,7 +374,7 @@ namespace Messenger
                     throw new ArgumentException( "Message could not be decoded." );
                 }
 
-                var decodeEn = Mod.DecodeKey( privateKeyObj.Key );
+                var decodeEn = _mod.DecodeKey( privateKeyObj.Key );
                 var d = decodeEn[0];
                 var n = decodeEn[1];
 
