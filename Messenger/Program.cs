@@ -245,7 +245,7 @@ namespace Messenger
             var r = ( p - 1 ) * ( q - 1 );
             var e = primeGen.GenPrimeNum( 32, 1 );
             var d = Given.ModInverse( e, r );
-            
+
             var publicKeyStr = _mod.EncodeKey( e, n );
             var privateKeyStr = _mod.EncodeKey( d, n );
 
@@ -313,7 +313,11 @@ namespace Messenger
                 var textByte = Encoding.UTF8.GetBytes( plaintext );
                 var bigText = new BigInteger( textByte );
                 
+                Console.WriteLine("plaintxt num: {0}", bigText);
+                
                 var cypherText = BigInteger.ModPow( bigText, e, n );
+                
+                Console.WriteLine("cypher: {0}", cypherText);
                 
                 var message = new Messages() { Email = email, 
                     Content = Convert.ToBase64String( cypherText.ToByteArray() ) };
@@ -374,7 +378,7 @@ namespace Messenger
 
                 var privateKeyObj = JsonConvert.DeserializeObject<PrivateKeys>( File.ReadAllText( "private.key" ) );
 
-                if ( !privateKeyObj.Emails.Contains( email) )
+                if ( !privateKeyObj.Emails.Contains( email ) )
                 {
                     throw new ArgumentException( "Message could not be decoded." );
                 }

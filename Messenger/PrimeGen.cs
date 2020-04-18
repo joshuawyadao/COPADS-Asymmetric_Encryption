@@ -1,4 +1,11 @@
-﻿using System;
+﻿/**
+ * Joshua Yadao
+ * Professor Jeremy Brown
+ * CSCI 251
+ * 17 April 2020
+ */
+
+using System;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
