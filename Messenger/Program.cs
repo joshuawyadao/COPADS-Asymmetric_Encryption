@@ -343,6 +343,11 @@ namespace Messenger
 
             var jsonObj = response.Content.ReadAsStringAsync().Result;
             var keyObj = JsonConvert.DeserializeObject<Keys>( jsonObj );
+
+            if ( keyObj == null )
+            {
+                throw new ArgumentException( "Key received was null. Please try again or check email." );
+            }
             
             var newJsonObj = JsonConvert.SerializeObject( keyObj, Formatting.Indented );
 
